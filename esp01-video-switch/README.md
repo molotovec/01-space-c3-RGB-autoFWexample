@@ -43,9 +43,9 @@ at boot; GPIO2 is safer to drive as a general-purpose output.
 This firmware doesn't use hardware serial at runtime, so GPIO1 (TX) is
 repurposed to drive the ESP-01's onboard LED as a channel indicator:
 
-- **1 blink, pause** — CM1 active
-- **2 blinks, pause** — CM2 active
-- **3 blinks, pause** — CM3 active
+- **1 short blink, then 1s pause, repeat** — CM1 active
+- **2 short blinks, then 1s pause, repeat** — CM2 active
+- **3 short blinks, then 1s pause, repeat** — CM3 active
 - **LED off** — a custom value that falls in a gap between channels
   (1400-1450 or 1600-1650)
 

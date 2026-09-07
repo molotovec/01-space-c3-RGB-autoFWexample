@@ -54,7 +54,7 @@ const char *channelForPwm(int us) {
 // number, so the LED just stays off.
 #define BLINK_ON_MS 150
 #define BLINK_OFF_MS 200
-#define BLINK_PAUSE_MS 900
+#define BLINK_PAUSE_MS 1000
 
 int ledBlinkTarget = 0;
 int ledBlinkCount = 0;

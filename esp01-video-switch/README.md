@@ -1,5 +1,8 @@
 # ESP-01 Video Switch Controller
 
+Works on both the original ESP-01 and the ESP-01S (same flash size and
+GPIO0/GPIO2 pinout).
+
 Standalone firmware for an ESP-01 (ESP8266) driving a video switch module's
 PWM select line. The switch reads a 50Hz, 1000-2000us servo-style PWM signal
 to pick between 3 inputs:
@@ -27,6 +30,10 @@ needed) and serves a small webpage with:
 
 GPIO2 was chosen over GPIO0 because GPIO0 doubles as a flash-mode strap pin
 at boot; GPIO2 is safer to drive as a general-purpose output.
+
+Note: many ESP-01S boards tie their onboard blue status LED to GPIO2. If
+yours does, the LED will flicker in time with the PWM pulses — harmless,
+just cosmetic, and it won't affect the signal seen by the video switch.
 
 ## Build & flash
 

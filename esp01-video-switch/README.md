@@ -25,6 +25,8 @@ needed) and serves a small webpage with:
   tuning within or across channel windows.
 - An onboard LED that blinks out the active channel number (1/2/3), so you
   can tell what's selected without opening the page. See below.
+- The last pulse width applied survives reboot/power loss — it's saved to
+  flash and reloaded at boot instead of always starting on CM1.
 
 ## Wiring
 
@@ -52,6 +54,14 @@ send commands to the board over the USB-TTL adapter's TX/RX lines while
 it's running normally (only during flashing, when GPIO0 is grounded and
 the bootloader owns the pins). The ROM bootloader briefly flickers the LED
 with boot noise at power-on before `setup()` takes over — that's normal.
+
+## Persistence
+
+Every time a channel button or the manual Apply sets a new pulse width, it's
+written to the ESP8266's flash-emulated EEPROM (skipped if it's the same
+value already stored, so repeat presses don't wear the flash). On boot,
+`setup()` reads that value back and resumes on it; a first boot with nothing
+saved yet (or corrupted/erased flash) falls back to CM1.
 
 ## Build & flash
 

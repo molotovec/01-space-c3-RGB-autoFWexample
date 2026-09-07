@@ -1,3 +1,4 @@
+#include <EEPROM.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <Servo.h>
@@ -109,6 +110,38 @@ void setPwm(int us) {
   ledPausing = false;
   ledTimer = millis();
   ledWrite(false);
+}
+
+// Persistence: the last applied pulse width survives reboot/power loss via
+// the ESP8266's flash-emulated EEPROM. A magic byte distinguishes "never
+// written" flash (erases to 0xFF) from a real saved value.
+#define EEPROM_SIZE 8
+#define EEPROM_MAGIC 0xB1
+
+struct PersistedState {
+  uint8_t magic;
+  uint16_t pwm;
+};
+
+int lastSavedPwm = -1;
+
+int loadPersistedPwm() {
+  PersistedState st;
+  EEPROM.get(0, st);
+  if (st.magic == EEPROM_MAGIC && st.pwm >= PWM_MIN && st.pwm <= PWM_MAX) {
+    return st.pwm;
+  }
+  return CM1_VALUE;
+}
+
+void savePwmIfChanged(int us) {
+  if (us == lastSavedPwm) return;
+  PersistedState st;
+  st.magic = EEPROM_MAGIC;
+  st.pwm = (uint16_t)us;
+  EEPROM.put(0, st);
+  EEPROM.commit();
+  lastSavedPwm = us;
 }
 
 String statusJson() {
@@ -342,16 +375,19 @@ void handleStatus() {
 
 void handleCm1() {
   setPwm(CM1_VALUE);
+  savePwmIfChanged(currentPwm);
   server.send(200, "application/json", statusJson());
 }
 
 void handleCm2() {
   setPwm(CM2_VALUE);
+  savePwmIfChanged(currentPwm);
   server.send(200, "application/json", statusJson());
 }
 
 void handleCm3() {
   setPwm(CM3_VALUE);
+  savePwmIfChanged(currentPwm);
   server.send(200, "application/json", statusJson());
 }
 
@@ -375,6 +411,7 @@ void handleSet() {
     return;
   }
   setPwm(us);
+  savePwmIfChanged(currentPwm);
   server.send(200, "application/json", statusJson());
 }
 
@@ -384,9 +421,12 @@ void handleNotFound() {
 
 void setup() {
   pinMode(LED_PIN, OUTPUT);
+  EEPROM.begin(EEPROM_SIZE);
 
   pwmOut.attach(PWM_PIN, PWM_MIN, PWM_MAX);
-  setPwm(CM1_VALUE);
+  int startupPwm = loadPersistedPwm();
+  setPwm(startupPwm);
+  lastSavedPwm = startupPwm; // already on flash; don't rewrite until it changes
 
   WiFi.mode(WIFI_AP);
   WiFi.softAP(AP_SSID, AP_PASSWORD);

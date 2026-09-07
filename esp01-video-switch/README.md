@@ -1,7 +1,10 @@
 # ESP-01 Video Switch Controller
 
-Works on both the original ESP-01 and the ESP-01S (same flash size and
-GPIO0/GPIO2 pinout).
+Targets the original ESP-01 (ESP8266, 1MB flash). It uses GPIO1 (the
+hardware serial TX pin) as a status LED, which only lines up with the
+onboard blue LED's wiring on the plain ESP-01 — on an ESP-01S that LED
+is on GPIO2 instead, so if you're on an ESP-01S you'd need to move the
+LED define back to GPIO2's neighbor or wire an external LED to GPIO1.
 
 Standalone firmware for an ESP-01 (ESP8266) driving a video switch module's
 PWM select line. The switch reads a 50Hz, 1000-2000us servo-style PWM signal
@@ -20,6 +23,8 @@ needed) and serves a small webpage with:
   channel it falls in.
 - A custom pulse-width input (1000-2000us) with an Apply button for manual
   tuning within or across channel windows.
+- An onboard LED that blinks out the active channel number (1/2/3), so you
+  can tell what's selected without opening the page. See below.
 
 ## Wiring
 
@@ -31,9 +36,22 @@ needed) and serves a small webpage with:
 GPIO2 was chosen over GPIO0 because GPIO0 doubles as a flash-mode strap pin
 at boot; GPIO2 is safer to drive as a general-purpose output.
 
-Note: many ESP-01S boards tie their onboard blue status LED to GPIO2. If
-yours does, the LED will flicker in time with the PWM pulses — harmless,
-just cosmetic, and it won't affect the signal seen by the video switch.
+## Status LED (GPIO1 / TX)
+
+This firmware doesn't use hardware serial at runtime, so GPIO1 (TX) is
+repurposed to drive the ESP-01's onboard LED as a channel indicator:
+
+- **1 blink, pause** — CM1 active
+- **2 blinks, pause** — CM2 active
+- **3 blinks, pause** — CM3 active
+- **LED off** — a custom value that falls in a gap between channels
+  (1400-1450 or 1600-1650)
+
+Because TX is in use, there's no serial output to monitor, and you can't
+send commands to the board over the USB-TTL adapter's TX/RX lines while
+it's running normally (only during flashing, when GPIO0 is grounded and
+the bootloader owns the pins). The ROM bootloader briefly flickers the LED
+with boot noise at power-on before `setup()` takes over — that's normal.
 
 ## Build & flash
 
@@ -48,10 +66,9 @@ ESP-01 has no onboard USB, so flashing requires an external USB-TTL adapter:
    ```
    Set `upload_port` in `platformio.ini` if it isn't auto-detected.
 4. Release GPIO0 (or power-cycle without it pulled low) to run normally.
-5. Watch serial for the AP details:
-   ```
-   python3 -m platformio device monitor -b 115200
-   ```
+   There's no serial output to check afterward (TX is now the status LED)
+   — the AP coming up is confirmed by seeing `VideoSwitch` in your WiFi
+   list and the LED blinking once flashing is done and it reboots.
 
 ## Using it
 

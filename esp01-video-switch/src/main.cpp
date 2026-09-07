@@ -7,6 +7,14 @@
 // GPIO0 doubles as the flash-mode strap pin.
 #define PWM_PIN 2
 
+// GPIO1 is the hardware UART TX pin, which is where the ESP-01's onboard
+// blue LED lives. Since this firmware never needs serial output at
+// runtime, TX is repurposed here as a status LED instead. Note the ROM
+// bootloader still prints garbage on this pin at power-on, so a brief
+// flicker before setup() runs is normal.
+#define LED_PIN 1
+#define LED_ACTIVE_LOW 1 // the onboard LED lights when this pin is pulled low
+
 #define PWM_MIN 1000
 #define PWM_MAX 2000
 
@@ -40,10 +48,67 @@ const char *channelForPwm(int us) {
   return "custom";
 }
 
+// Status LED: blinks out the active channel number (1/2/3), pauses, then
+// repeats. A value that falls in a gap between channels has no preset
+// number, so the LED just stays off.
+#define BLINK_ON_MS 150
+#define BLINK_OFF_MS 200
+#define BLINK_PAUSE_MS 900
+
+int ledBlinkTarget = 0;
+int ledBlinkCount = 0;
+bool ledOn = false;
+bool ledPausing = false;
+unsigned long ledTimer = 0;
+
+void ledWrite(bool on) {
+#if LED_ACTIVE_LOW
+  digitalWrite(LED_PIN, on ? LOW : HIGH);
+#else
+  digitalWrite(LED_PIN, on ? HIGH : LOW);
+#endif
+}
+
+void serviceLed() {
+  if (ledBlinkTarget == 0) {
+    ledWrite(false);
+    return;
+  }
+  unsigned long now = millis();
+  if (ledPausing) {
+    if (now - ledTimer >= BLINK_PAUSE_MS) {
+      ledPausing = false;
+      ledBlinkCount = 0;
+      ledOn = false;
+      ledTimer = now;
+    }
+    return;
+  }
+  unsigned long interval = ledOn ? BLINK_ON_MS : BLINK_OFF_MS;
+  if (now - ledTimer < interval) return;
+  ledTimer = now;
+  ledOn = !ledOn;
+  ledWrite(ledOn);
+  if (!ledOn) {
+    ledBlinkCount++;
+    if (ledBlinkCount >= ledBlinkTarget) ledPausing = true;
+  }
+}
+
 void setPwm(int us) {
   us = constrain(us, PWM_MIN, PWM_MAX);
   currentPwm = us;
   pwmOut.writeMicroseconds(us);
+
+  if (us >= CM1_MIN && us <= CM1_MAX) ledBlinkTarget = 1;
+  else if (us >= CM2_MIN && us <= CM2_MAX) ledBlinkTarget = 2;
+  else if (us >= CM3_MIN && us <= CM3_MAX) ledBlinkTarget = 3;
+  else ledBlinkTarget = 0;
+  ledBlinkCount = 0;
+  ledOn = false;
+  ledPausing = false;
+  ledTimer = millis();
+  ledWrite(false);
 }
 
 String statusJson() {
@@ -156,7 +221,7 @@ const char PAGE_TEMPLATE[] PROGMEM = R"HTML(
 <body>
 <div class="wrap">
   <header>
-    <div class="eyebrow">ESP-01S &middot; Video Switch Controller</div>
+    <div class="eyebrow">ESP-01 &middot; Video Switch Controller</div>
     <h1>Signal Select</h1>
   </header>
 
@@ -318,19 +383,13 @@ void handleNotFound() {
 }
 
 void setup() {
-  Serial.begin(115200);
+  pinMode(LED_PIN, OUTPUT);
 
   pwmOut.attach(PWM_PIN, PWM_MIN, PWM_MAX);
   setPwm(CM1_VALUE);
 
   WiFi.mode(WIFI_AP);
   WiFi.softAP(AP_SSID, AP_PASSWORD);
-
-  Serial.println();
-  Serial.print("AP SSID: ");
-  Serial.println(AP_SSID);
-  Serial.print("AP IP address: ");
-  Serial.println(WiFi.softAPIP());
 
   server.on("/", handleRoot);
   server.on("/status", handleStatus);
@@ -340,9 +399,9 @@ void setup() {
   server.on("/set", handleSet);
   server.onNotFound(handleNotFound);
   server.begin();
-  Serial.println("HTTP server started");
 }
 
 void loop() {
   server.handleClient();
+  serviceLed();
 }
